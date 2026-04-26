@@ -157,6 +157,52 @@ func ErrorHandler(c *gin.Context) {
 
 ---
 
+## 📘 Swagger Integration
+
+xerr provides a dedicated DTO for API documentation to ensure consistent and properly documented error responses in Swagger / OpenAPI.
+
+```go
+type SwaggerErrOutput struct {
+    Code    Code           `json:"code" example:"INVALID_ARGUMENT"`
+    Message string         `json:"message,omitempty" example:"invalid request body"`
+    Meta    map[string]any `json:"meta,omitempty" example:"field=username"`
+} // @name Error
+```
+
+### 🎯 Why a Separate Swagger Model?
+
+Although `xerr.Error` already controls JSON serialization via `MarshalJSON`,
+
+Swagger generators (like `swaggo/swag`) rely on struct definitions for schema generation.
+
+SwaggerErrOutput exists purely for documentation purposes and ensures:
+
+- ✅ Stable and predictable OpenAPI schema
+- ✅ Accurate example values in Swagger UI
+- ✅ No leakage of internal fields (err, status)
+- ✅ Clear API contract for frontend teams
+
+### 🧩 Usage Example in Handler
+
+```go
+// @Failure 400 {object} xerr.SwaggerErrOutput
+// @Failure 401 {object} xerr.SwaggerErrOutput
+// @Failure 500 {object} xerr.SwaggerErrOutput
+```
+
+```json
+{
+  "code": "INVALID_ARGUMENT",
+  "message": "invalid request body",
+  "meta": {
+    "field": "username"
+  }
+}
+
+```
+
+---
+
 ## 🧪 Why xerr?
 
 - 📘 Perfect for Clean Architecture
