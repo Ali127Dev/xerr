@@ -18,8 +18,8 @@ type Error struct {
 func (e *Error) Code() Code           { return e.code }
 func (e *Error) Message() string      { return e.message }
 func (e *Error) Meta() map[string]any { return e.meta }
-func (e *Error) Status() int { return e.status }
-func (e *Error) Err() error  { return e.err }
+func (e *Error) Status() int          { return e.status }
+func (e *Error) Err() error           { return e.err }
 func (e *Error) HTTPStatus() int {
 	if e.status != 0 {
 		return e.status
