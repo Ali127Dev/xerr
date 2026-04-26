@@ -2,6 +2,7 @@ package xerr
 
 import "net/http"
 
+// CodesHttpStatus maps an error Code to default HTTP status.
 var CodesHttpStatus = map[Code]int{
 	// ========================
 	// System / Internal Errors

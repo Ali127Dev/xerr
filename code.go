@@ -2,6 +2,7 @@ package xerr
 
 import "net/http"
 
+// Code represents a machine-readable application error code.
 type Code string
 
 func (c Code) String() string { return string(c) }

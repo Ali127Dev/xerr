@@ -5,38 +5,13 @@ import (
 	"fmt"
 )
 
-type ErrorOption func(*Error)
-
+// Error represents a structured application error.
 type Error struct {
 	code    Code
 	message string
 	status  int
 	err     error
 	meta    map[string]any
-}
-
-func (e *Error) Code() Code           { return e.code }
-func (e *Error) Message() string      { return e.message }
-func (e *Error) Meta() map[string]any { return e.meta }
-func (e *Error) Status() int          { return e.status }
-func (e *Error) Err() error           { return e.err }
-func (e *Error) HTTPStatus() int {
-	if e.status != 0 {
-		return e.status
-	}
-	return e.code.HTTPStatus()
-}
-
-func New(code Code, opts ...ErrorOption) *Error {
-	err := &Error{
-		code: code,
-		meta: make(map[string]any),
-	}
-
-	for _, opt := range opts {
-		opt(err)
-	}
-	return err
 }
 
 func (e *Error) Error() string {
@@ -50,8 +25,19 @@ func (e *Error) Error() string {
 	}
 }
 
-func (e *Error) Unwrap() error {
-	return e.err
+func (e *Error) Unwrap() error { return e.err }
+
+func (e *Error) Code() Code           { return e.code }
+func (e *Error) Message() string      { return e.message }
+func (e *Error) Meta() map[string]any { return e.meta }
+func (e *Error) Status() int          { return e.status }
+func (e *Error) Err() error           { return e.err }
+
+func (e *Error) HTTPStatus() int {
+	if e.status != 0 {
+		return e.status
+	}
+	return e.code.HTTPStatus()
 }
 
 func (e *Error) MarshalJSON() ([]byte, error) {
@@ -71,49 +57,4 @@ func (e *Error) MarshalJSON() ([]byte, error) {
 		Message: msg,
 		Meta:    e.meta,
 	})
-}
-
-func WithMessage(msg string) ErrorOption {
-	return func(e *Error) {
-		e.message = msg
-	}
-}
-
-func WithStatus(status int) ErrorOption {
-	return func(e *Error) {
-		e.status = status
-	}
-}
-
-func WithErr(err error) ErrorOption {
-	return func(e *Error) {
-		e.err = err
-	}
-}
-
-func WithMeta(key string, value any) ErrorOption {
-	return func(e *Error) {
-		if e.meta == nil {
-			e.meta = make(map[string]any)
-		}
-		e.meta[key] = value
-	}
-}
-
-func Wrap(err error, code Code, opts ...ErrorOption) *Error {
-	if err == nil {
-		return nil
-	}
-
-	e := &Error{
-		code: code,
-		err:  err,
-		meta: make(map[string]any),
-	}
-
-	for _, opt := range opts {
-		opt(e)
-	}
-
-	return e
 }
