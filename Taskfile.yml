@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  APP_NAME: echo
+  CMD_DIR: ./cmd
+  DAO_GEN_DIR: ./cmd/gen
+  SWAGGER_DOCS_DIR: ./docs/swagger
+  MIGRATIONS_DIR: ./internal/infrastructure/db/migration
+  GOOSE_DRIVER: postgres
+  GOOSE_DB: "postgres://{{.DB_POSTGRES_USER}}:{{.DB_POSTGRES_PASSWORD}}@{{.DB_POSTGRES_HOST}}:{{.DB_POSTGRES_PORT}}/{{.DB_POSTGRES_DB}}?sslmode=disable"
+
+tasks:
+  # -------------------------
+  # deps
+  # -------------------------
+
+  deps:
+    desc: tidy go modules
+    cmds:
+      - go mod tidy
+
+  # -------------------------
+  # formatting / lint
+  # -------------------------
+
+  fmt:
+    desc: format code
+    cmds:
+      - go fmt ./...
+
+  lint:
+    desc: run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  # -------------------------
+  # tests
+  # -------------------------
+
+  test:
+    desc: run tests
+    cmds:
+      - go test ./...
