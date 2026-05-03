@@ -1,0 +1,84 @@
+run:
+  timeout: 5m
+  tests: true
+
+output:
+  formats:
+    - format: colored-line-number
+
+linters:
+  disable-all: true
+  enable:
+    # correctness
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - typecheck
+
+    # code quality
+    - revive
+    - gocritic
+    - goconst
+    - gocyclo
+
+    # bugs
+    - gosec
+    - bodyclose
+    - nilerr
+    - noctx
+
+    # style
+    - gofmt
+    - goimports
+    - whitespace
+
+    # performance
+    - prealloc
+    - unconvert
+
+    # misc
+    - misspell
+    - nakedret
+    - depguard
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+
+  gofmt:
+    simplify: true
+
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "log"
+            desc: "use structured logger instead of standard log"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+
+    - path: mock
+      linters:
+        - gosec

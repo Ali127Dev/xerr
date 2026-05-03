@@ -42,7 +42,7 @@ const (
 
 const (
 	CodeUnauthorized        Code = "UNAUTHORIZED"
-	CodeInvalidCredentials  Code = "INVALID_CREDENTIALS"
+	CodeInvalidCredentials  Code = "INVALID_CREDENTIALS" //nolint:gosec
 	CodeInvalidToken        Code = "INVALID_TOKEN"
 	CodeExpiredToken        Code = "TOKEN_EXPIRED"
 	CodeRefreshTokenInvalid Code = "INVALID_REFRESH_TOKEN"
