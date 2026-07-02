@@ -18,10 +18,10 @@ func WithErr(err error) ErrorOption {
 }
 
 // WithMeta adds a metadata entry.
-func WithMeta(key string, value any) ErrorOption {
+func WithMeta(key string, value ErrorReason) ErrorOption {
 	return func(e *Error) {
 		if e.meta == nil {
-			e.meta = make(map[string]any)
+			e.meta = make(map[string]ErrorReason)
 		}
 		e.meta[key] = value
 	}
