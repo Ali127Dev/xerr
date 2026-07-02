@@ -10,13 +10,6 @@ func WithMessage(msg string) ErrorOption {
 	}
 }
 
-// WithStatus overrides the HTTP status.
-func WithStatus(status int) ErrorOption {
-	return func(e *Error) {
-		e.status = status
-	}
-}
-
 // WithErr sets the wrapped underlying error.
 func WithErr(err error) ErrorOption {
 	return func(e *Error) {
