@@ -91,14 +91,12 @@ func (e *Error) HTTPStatus() int {
 
 func (e *Error) MarshalJSON() ([]byte, error) {
 	type response struct {
-		Code    Code                   `json:"code"`
-		Message string                 `json:"message,omitempty"`
-		Meta    map[string]ErrorReason `json:"meta,omitempty"`
+		Code Code                   `json:"code"`
+		Meta map[string]ErrorReason `json:"meta,omitempty"`
 	}
 
 	return json.Marshal(response{
-		Code:    e.code,
-		Message: e.Error(),
-		Meta:    e.meta,
+		Code: e.code,
+		Meta: e.meta,
 	})
 }
