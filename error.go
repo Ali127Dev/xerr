@@ -2,6 +2,7 @@ package xerr
 
 import (
 	"encoding/json"
+	"strings"
 )
 
 // Error represents a structured application error.
@@ -13,10 +14,40 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	var b strings.Builder
+
+	b.WriteString(e.code.String())
+
 	if e.message != "" {
-		return e.message
+		b.WriteString(": ")
+		b.WriteString(e.message)
 	}
-	return string(e.code)
+
+	if len(e.meta) > 0 {
+		b.WriteString(" [")
+
+		i := 0
+		for field, reason := range e.meta {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+
+			b.WriteString(field)
+			b.WriteByte('=')
+			b.WriteString(reason.String())
+
+			i++
+		}
+
+		b.WriteByte(']')
+	}
+
+	if e.err != nil {
+		b.WriteString(": ")
+		b.WriteString(e.err.Error())
+	}
+
+	return b.String()
 }
 
 func (e *Error) Unwrap() error { return e.err }
