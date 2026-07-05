@@ -4,7 +4,6 @@ package xerr
 func New(code Code, opts ...ErrorOption) *Error {
 	err := &Error{
 		code: code,
-		meta: make(map[string]ErrorReason),
 	}
 	for _, opt := range opts {
 		opt(err)
@@ -21,7 +20,6 @@ func Wrap(err error, code Code, opts ...ErrorOption) *Error {
 	e := &Error{
 		code: code,
 		err:  err,
-		meta: make(map[string]ErrorReason),
 	}
 	for _, opt := range opts {
 		opt(e)

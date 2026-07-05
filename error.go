@@ -7,10 +7,11 @@ import (
 
 // Error represents a structured application error.
 type Error struct {
-	code    Code
-	message string
-	err     error
-	meta    map[string]ErrorReason
+	code        Code
+	message     string
+	err         error
+	diagnostics map[DiagnosticKey]string
+	meta        map[string]ErrorReason
 }
 
 func (e *Error) Error() string {
@@ -25,21 +26,32 @@ func (e *Error) Error() string {
 
 	if len(e.meta) > 0 {
 		b.WriteString(" [")
-
 		i := 0
 		for field, reason := range e.meta {
 			if i > 0 {
 				b.WriteString(", ")
 			}
-
 			b.WriteString(field)
 			b.WriteByte('=')
 			b.WriteString(reason.String())
-
 			i++
 		}
-
 		b.WriteByte(']')
+	}
+
+	if len(e.diagnostics) > 0 {
+		b.WriteString(" {")
+		i := 0
+		for key, value := range e.diagnostics {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(string(key))
+			b.WriteByte('=')
+			b.WriteString(value)
+			i++
+		}
+		b.WriteByte('}')
 	}
 
 	if e.err != nil {
@@ -74,6 +86,7 @@ func (e *Error) Is(target error) bool {
 func (e *Error) Code() Code      { return e.code }
 func (e *Error) Message() string { return e.message }
 func (e *Error) Err() error      { return e.err }
+
 func (e *Error) Meta() map[string]ErrorReason {
 	if e.meta == nil {
 		return nil
@@ -85,18 +98,31 @@ func (e *Error) Meta() map[string]ErrorReason {
 	return cp
 }
 
+func (e *Error) Diagnostics() map[DiagnosticKey]string {
+	if e.diagnostics == nil {
+		return nil
+	}
+	cp := make(map[DiagnosticKey]string, len(e.diagnostics))
+	for k, v := range e.diagnostics {
+		cp[k] = v
+	}
+	return cp
+}
+
 func (e *Error) HTTPStatus() int {
 	return e.code.HTTPStatus()
 }
 
 func (e *Error) MarshalJSON() ([]byte, error) {
 	type response struct {
-		Code Code                   `json:"code"`
-		Meta map[string]ErrorReason `json:"meta,omitempty"`
+		Code    Code                   `json:"code"`
+		Message string                 `json:"message,omitempty"`
+		Meta    map[string]ErrorReason `json:"meta,omitempty"`
 	}
 
 	return json.Marshal(response{
-		Code: e.code,
-		Meta: e.meta,
+		Code:    e.code,
+		Message: e.message,
+		Meta:    e.meta,
 	})
 }

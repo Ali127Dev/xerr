@@ -26,3 +26,13 @@ func WithMeta(key string, value ErrorReason) ErrorOption {
 		e.meta[key] = value
 	}
 }
+
+// WithDiagnostics adds a diagnostics entry.
+func WithDiagnostics(key DiagnosticKey, value string) ErrorOption {
+	return func(e *Error) {
+		if e.diagnostics == nil {
+			e.diagnostics = make(map[DiagnosticKey]string)
+		}
+		e.diagnostics[key] = value
+	}
+}
