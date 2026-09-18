@@ -14,6 +14,16 @@ func (c Code) HTTPStatus() int {
 	return http.StatusInternalServerError
 }
 
+// Kind reports the default Kind for this code, which in turn decides
+// whether an error carrying it is exposed to clients by default. See
+// CodesKind.
+func (c Code) Kind() Kind {
+	if kind, ok := CodesKind[c]; ok {
+		return kind
+	}
+	return KindUnknown
+}
+
 // ========================
 // System / Internal Errors
 // ========================
@@ -22,6 +32,7 @@ const (
 	CodeInternalError      Code = "INTERNAL_SERVER_ERROR"
 	CodeUnknownError       Code = "UNKNOWN_ERROR"
 	CodeServiceUnavailable Code = "SERVICE_UNAVAILABLE"
+	CodePanic              Code = "PANIC"
 )
 
 // ========================
@@ -96,4 +107,14 @@ const (
 	CodeDuplicateKey    Code = "DUPLICATE_KEY"
 	CodeForeignKeyError Code = "FOREIGN_KEY_CONSTRAINT"
 	CodeRecordNotFound  Code = "RECORD_NOT_FOUND"
+)
+
+// ========================
+// External / Network
+// ========================
+
+const (
+	CodeNetworkError    Code = "NETWORK_ERROR"
+	CodeTimeout         Code = "TIMEOUT"
+	CodeExternalService Code = "EXTERNAL_SERVICE_ERROR"
 )

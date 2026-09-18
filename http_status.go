@@ -11,6 +11,7 @@ var CodesHttpStatus = map[Code]int{
 	CodeInternalError:      http.StatusInternalServerError, // 500
 	CodeUnknownError:       http.StatusInternalServerError, // 500
 	CodeServiceUnavailable: http.StatusServiceUnavailable,  // 503
+	CodePanic:              http.StatusInternalServerError, // 500
 
 	// ========================
 	// Request Errors
@@ -71,4 +72,12 @@ var CodesHttpStatus = map[Code]int{
 	CodeDuplicateKey:    http.StatusConflict,            // 409
 	CodeForeignKeyError: http.StatusConflict,            // 409
 	CodeRecordNotFound:  http.StatusNotFound,            // 404
+
+	// ========================
+	// External / Network
+	// ========================
+
+	CodeNetworkError:    http.StatusBadGateway,     // 502
+	CodeTimeout:         http.StatusGatewayTimeout, // 504
+	CodeExternalService: http.StatusBadGateway,     // 502
 }

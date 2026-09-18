@@ -1,20 +1,18 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 output:
   formats:
-    - format: colored-line-number
-
+    text:
+      path: stdout
 linters:
-  disable-all: true
+  default: none
   enable:
     # correctness
     - govet
     - staticcheck
     - errcheck
     - ineffassign
-    - typecheck
 
     # code quality
     - revive
@@ -29,8 +27,6 @@ linters:
     - noctx
 
     # style
-    - gofmt
-    - goimports
     - whitespace
 
     # performance
@@ -41,44 +37,57 @@ linters:
     - misspell
     - nakedret
     - depguard
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
-
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-
-  revive:
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: log$
+              desc: use structured logger (log/slog) instead of standard log
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocyclo:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: exported
-        disabled: false
-
-  gofmt:
-    simplify: true
-
-  depguard:
-    rules:
-      main:
-        deny:
-          - pkg: "log"
-            desc: "use structured logger instead of standard log"
-
+      - linters:
+          - errcheck
+          - gocyclo
+        path: _test\.go
+      - linters:
+          - gosec
+        path: mock
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-
-    - path: mock
-      linters:
-        - gosec
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
