@@ -28,6 +28,19 @@ const (
 
 func (k Kind) String() string { return string(k) }
 
+// known reports whether k is one of the four defined Kind constants.
+// Used by RegisterCode to reject a typo'd or made-up Kind at
+// registration time instead of letting it silently default through
+// Safe()'s "default: false" branch.
+func (k Kind) known() bool {
+	switch k {
+	case KindDomain, KindApplication, KindInfrastructure, KindUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Safe reports whether errors of this kind are exposed to clients by
 // default. It can always be overridden per-error with WithExpose.
 func (k Kind) Safe() bool {
@@ -43,6 +56,12 @@ func (k Kind) Safe() bool {
 
 // CodesKind maps an error Code to its default Kind. Codes not present
 // default to KindUnknown (unsafe to expose).
+//
+// Prefer RegisterCode to add a new code: it takes the same lock
+// Code.Kind() / Code.HTTPStatus() use for reads, and it panics on a
+// collision instead of silently overwriting an existing entry. Writing
+// to this map directly still works, for backward compatibility, but
+// bypasses both of those protections.
 var CodesKind = map[Code]Kind{
 	// System / Internal
 	CodeInternalError:      KindUnknown,

@@ -18,6 +18,7 @@ func TestError_LogValue_IncludesUnexposedFields(t *testing.T) {
 	e := xerr.New(xerr.CodeDatabaseError,
 		xerr.WithMessage("could not reach primary"),
 		xerr.WithErr(cause),
+		xerr.WithParam("host", "db-primary"),
 		xerr.WithDiagnostic(xerr.DiagnosticOperation, "CreateUser"),
 	)
 
@@ -52,6 +53,10 @@ func TestError_LogValue_IncludesUnexposedFields(t *testing.T) {
 	if !ok || diagnostics["operation"] != "CreateUser" {
 		t.Fatalf("diagnostics = %v", errAttr["diagnostics"])
 	}
+	params, ok := errAttr["params"].(map[string]any)
+	if !ok || params["host"] != "db-primary" {
+		t.Fatalf("params = %v", errAttr["params"])
+	}
 }
 
 func TestError_LogValue_OmitsEmptyFields(t *testing.T) {
@@ -66,7 +71,7 @@ func TestError_LogValue_OmitsEmptyFields(t *testing.T) {
 	}
 	errAttr := got["err"].(map[string]any)
 
-	for _, field := range []string{"message", "violations", "diagnostics", "cause", "stack"} {
+	for _, field := range []string{"message", "params", "violations", "diagnostics", "cause", "stack"} {
 		if _, present := errAttr[field]; present {
 			t.Errorf("unexpected field %q in log output: %v", field, errAttr[field])
 		}

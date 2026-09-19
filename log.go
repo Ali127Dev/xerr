@@ -4,8 +4,9 @@ import "log/slog"
 
 // LogValue implements slog.LogValuer. Passing an *Error to log/slog
 // renders every field your logger should see — Code, Kind, Message,
-// Violations, Diagnostics, the wrapped Err, and Stack if captured — as
-// structured attributes, without hand-writing each one at the call site:
+// Params, Violations, Diagnostics, the wrapped Err, and Stack if
+// captured — as structured attributes, without hand-writing each one at
+// the call site:
 //
 //	slog.Error("request failed", "err", xerr.Wrap(dbErr, xerr.CodeDatabaseError))
 //
@@ -14,7 +15,7 @@ import "log/slog"
 // exact fields the client boundary hides — because this path is for
 // your logger, never for a client response.
 func (e *Error) LogValue() slog.Value {
-	attrs := make([]slog.Attr, 0, 7)
+	attrs := make([]slog.Attr, 0, 8)
 
 	attrs = append(attrs,
 		slog.String("code", e.code.String()),
@@ -23,6 +24,10 @@ func (e *Error) LogValue() slog.Value {
 
 	if e.message != "" {
 		attrs = append(attrs, slog.String("message", e.message))
+	}
+
+	if len(e.params) > 0 {
+		attrs = append(attrs, slog.Any("params", e.params))
 	}
 
 	if len(e.violations) > 0 {

@@ -2,6 +2,7 @@ package xerr
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"runtime"
 	"sort"
@@ -23,6 +24,7 @@ import (
 //	                                                         otherwise CodeInternalError
 //	Kind         always                                     never (not serialized)
 //	Message      always                                     only if Exposed
+//	Params       always                                     only if Exposed
 //	Violations   always                                     only if Exposed
 //	Diagnostics  always                                     never — not even when Exposed
 //	Err (cause)  always (via Error() / Unwrap())             never
@@ -47,6 +49,14 @@ type Error struct {
 
 	// message is always logged. Sent to the client only when Exposed.
 	message string
+
+	// params carries error-level dynamic detail a client-facing message
+	// template needs (e.g. {"resource": "product", "max": 5}), set via
+	// WithParam. Always logged. Sent to the client only when Exposed —
+	// exactly like message and violations. Unlike diagnostics, this is
+	// the "fine to leak, subject to Exposed" bucket, not the "never
+	// leaks" one.
+	params map[string]any
 
 	// err is the wrapped cause. Always logged (Error()/Unwrap()/errors.As
 	// walk it in full). Never sent to the client, regardless of Exposed.
@@ -91,6 +101,25 @@ func (e *Error) Error() string {
 			b.WriteString(v.Reason.String())
 		}
 		b.WriteByte(']')
+	}
+
+	if len(e.params) > 0 {
+		keys := make([]string, 0, len(e.params))
+		for k := range e.params {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		b.WriteString(" <")
+		for i, k := range keys {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(k)
+			b.WriteByte('=')
+			fmt.Fprintf(&b, "%v", e.params[k])
+		}
+		b.WriteByte('>')
 	}
 
 	if len(e.diagnostics) > 0 {
@@ -180,6 +209,19 @@ func (e *Error) Violations() []Violation {
 	return cp
 }
 
+// Params returns a copy of the error-level dynamic detail attached via
+// WithParam (e.g. which Resource was involved, or a limit that was
+// exceeded). Safe to log always. Only sent to a client when Exposed is
+// true.
+func (e *Error) Params() map[string]any {
+	if e.params == nil {
+		return nil
+	}
+	cp := make(map[string]any, len(e.params))
+	maps.Copy(cp, e.params)
+	return cp
+}
+
 // Diagnostics returns a copy of the internal-only debug context attached
 // to this error (e.g. which operation was running, an internal resource
 // id). Log-only, unconditionally: unlike Message and Violations,
@@ -227,19 +269,20 @@ func (e *Error) Stack() string {
 }
 
 // MarshalJSON produces the client-safe JSON representation of the error.
-// Only three fields are ever eligible to appear: code, message, and
-// violations — Kind, Diagnostics, and the wrapped Err are never
+// Only four fields are ever eligible to appear: code, message, params,
+// and violations — Kind, Diagnostics, and the wrapped Err are never
 // serialized, under any circumstance.
 //
 // When Exposed is false, the response collapses further, to a bare
-// {"code":"INTERNAL_SERVER_ERROR"}: the specific code, message, and any
-// wrapped error stay available server-side via Error(), Code(), and
-// Diagnostics(), but never reach the client.
+// {"code":"INTERNAL_SERVER_ERROR"}: the specific code, message, params,
+// and any wrapped error stay available server-side via Error(), Code(),
+// Params(), and Diagnostics(), but never reach the client.
 func (e *Error) MarshalJSON() ([]byte, error) {
 	type response struct {
-		Code       Code        `json:"code"`
-		Message    string      `json:"message,omitempty"`
-		Violations []Violation `json:"violations,omitempty"`
+		Code       Code           `json:"code"`
+		Message    string         `json:"message,omitempty"`
+		Params     map[string]any `json:"params,omitempty"`
+		Violations []Violation    `json:"violations,omitempty"`
 	}
 
 	if !e.Exposed() {
@@ -249,6 +292,7 @@ func (e *Error) MarshalJSON() ([]byte, error) {
 	return json.Marshal(response{
 		Code:       e.code,
 		Message:    e.message,
+		Params:     e.params,
 		Violations: e.violations,
 	})
 }

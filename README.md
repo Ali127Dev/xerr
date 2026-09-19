@@ -10,7 +10,7 @@ This guide walks through every feature, step by step, with runnable code. No pri
 - [Step 2: Understand `Code`](#step-2-understand-code)
 - [Step 3: Understand `Kind` and who gets to see what](#step-3-understand-kind-and-who-gets-to-see-what)
 - [Step 4: Override the default with `WithKind` / `WithExpose`](#step-4-override-the-default-with-withkind--withexpose)
-- [Step 5: Two ways to describe an error to a client](#step-5-two-ways-to-describe-an-error-to-a-client)
+- [Step 5: Three ways to describe an error to a client](#step-5-three-ways-to-describe-an-error-to-a-client)
 - [Step 6: `Diagnostics` — notes that never leave the server](#step-6-diagnostics--notes-that-never-leave-the-server)
 - [Step 7: Wrapping an existing error](#step-7-wrapping-an-existing-error)
 - [Step 8: The full DDD pattern — repository → service → HTTP](#step-8-the-full-ddd-pattern--repository--service--http)
@@ -81,6 +81,18 @@ A `Code` is a short, machine-readable, all-caps string identifying *what kind of
 ```go
 const CodeCouponExpired xerr.Code = "COUPON_EXPIRED"
 ```
+
+A bare constant like that isn't enough on its own — `xerr` has no idea what `Kind` or HTTP status it should carry, so until you register it, `CodeCouponExpired.Kind()` reports `KindUnknown` and `.HTTPStatus()` reports `500`. Teach `xerr` about it with `RegisterCode`, typically from an `init()` so it happens once, before your server starts accepting traffic:
+
+```go
+func init() {
+    xerr.RegisterCode(CodeCouponExpired, xerr.KindDomain, http.StatusConflict)
+}
+```
+
+`RegisterCode` panics if the code is already registered — whether that's one of `xerr`'s own built-ins or a code your application registered earlier — so a typo that collides with an existing code fails loudly at startup instead of silently changing that code's behavior. It also panics on malformed input: an empty code, a `Kind` outside the four defined constants, or an `httpStatus` outside 400-599. `xerr` itself stays generic and knows nothing about any single application's domain (entity names, plan tiers, feature flags, ...) — every app-specific code, like `CodeCouponExpired` above, is defined and registered by the application that owns it.
+
+Once registered, a custom code behaves exactly like a built-in one everywhere — `Kind()`, `HTTPStatus()`, `Exposed()`, `MarshalJSON`, `ExposedCodes()` (below).
 
 Every `Code` has two things attached to it automatically:
 
@@ -160,9 +172,9 @@ err := xerr.New(xerr.CodeValidationFailed, xerr.WithExpose(false)) // now hidden
 
 ---
 
-## Step 5: Two ways to describe an error to a client
+## Step 5: Three ways to describe an error to a client
 
-You get to choose (per error) how the client should learn *what* went wrong. Neither is required, and you can use both together.
+You get to choose (per error) how the client should learn *what* went wrong. None is required, and you can combine them freely.
 
 ### Option A — Structured `Violations` (the client builds its own text)
 
@@ -224,6 +236,24 @@ err := xerr.New(xerr.CodeValidationFailed,
 
 Remember: both `Message` and `Violations` only reach the client if `Exposed()` is true (see [Step 3](#step-3-understand-kind-and-who-gets-to-see-what)). Set them on any error, regardless of `Kind` — they just won't be serialized if that error turns out to be unsafe to expose.
 
+### Option C — Error-level `Params` (dynamic detail with no natural field)
+
+`Violation.Params` carries dynamic values for one field's rule (`{"min": 8}` next to an email violation). Sometimes the dynamic detail isn't about a single field at all — it's about the error as a whole: *which* resource, *what* limit was hit. That's what `WithParam` is for:
+
+```go
+err := xerr.New(xerr.CodeInvalidParam,
+    xerr.WithMessage("seat limit exceeded"),
+    xerr.WithParam("resource", "seats"),
+    xerr.WithParam("max", 5),
+)
+```
+
+```json
+{ "code": "INVALID_PARAMETER", "message": "seat limit exceeded", "params": { "resource": "seats", "max": 5 } }
+```
+
+Same rule as `Message` and `Violations`: `params` is only serialized when `Exposed()` is true, and `.Params()` always has the full value server-side regardless.
+
 ---
 
 ## Step 6: `Diagnostics` — notes that never leave the server
@@ -239,7 +269,7 @@ err := xerr.New(xerr.CodeDatabaseError,
 
 They show up in `err.Error()` (for plain-text logs) and in `LogValue()` (for `log/slog`), but `json.Marshal(err)` never includes them, under any circumstance. Built-in keys are `DiagnosticOperation`, `DiagnosticReason`, `DiagnosticResource` — `DiagnosticKey` is just a `string` type, so you can define your own too.
 
-**Rule of thumb:** if it must never leak, it's a `Diagnostic`. If it's fine to leak *when the error is Exposed*, it's a `Message` or a `Violation`.
+**Rule of thumb:** if it must never leak, it's a `Diagnostic`. If it's fine to leak *when the error is Exposed*, it's a `Message`, a `Violation`, or a `Param`.
 
 ---
 
@@ -500,6 +530,7 @@ For `swaggo/swag`-style generators, use the dedicated DTOs — they mirror the e
 type SwaggerErrOutput struct {
     Code       string                   `json:"code" example:"VALIDATION_FAILED"`
     Message    string                   `json:"message,omitempty" example:"invalid request body"`
+    Params     map[string]any           `json:"params,omitempty" example:"resource:product"`
     Violations []SwaggerViolationOutput `json:"violations,omitempty"`
 }
 
@@ -509,6 +540,23 @@ type SwaggerViolationOutput struct {
     Params map[string]any `json:"params,omitempty" example:"min:8"`
 }
 ```
+
+### Making `code` render as an enum
+
+`SwaggerErrOutput.Code` is a plain `string`, not a generated enum — `xerr` only knows its own built-in codes plus whatever your application registered with `RegisterCode`, so it can't bake a closed set into this struct without also knowing every domain code your application defines. If you want `code` to render as an OpenAPI enum, build the value list yourself and apply it as a `swaggo` `enums:"..."` tag (or an equivalent doc-generation step) on your own copy of the struct:
+
+```go
+func exposedCodeNames() []string {
+    names := make([]string, 0)
+    for code := range xerr.ExposedCodes() { // built-ins + everything you registered
+        names = append(names, string(code))
+    }
+    sort.Strings(names)
+    return names
+}
+```
+
+`ExposedCodes()` returns every code whose *default* `Kind` is safe to expose — see [Step 2](#step-2-understand-code) for `RegisterCode` and the note there about `WithExpose` overrides not being reflected here.
 
 ---
 
@@ -595,7 +643,7 @@ Every code below has a default `Kind` (safe to expose or not) and a default HTTP
 | `CodeTimeout` (`TIMEOUT`) | `KindInfrastructure` | 504 |
 | `CodeExternalService` (`EXTERNAL_SERVICE_ERROR`) | `KindInfrastructure` | 502 |
 
-You are not limited to these — define your own `Code` constants freely (`const CodeCouponExpired xerr.Code = "COUPON_EXPIRED"`). An unregistered code defaults to `KindUnknown` (hidden) and HTTP 500 unless you set `WithKind`/`WithExpose` and register it in your own map, or just override per error with `WithKind`.
+You are not limited to these — define your own `Code` constants freely (`const CodeCouponExpired xerr.Code = "COUPON_EXPIRED"`) and call `RegisterCode` to give it a real `Kind` and HTTP status (see [Step 2](#step-2-understand-code)). An unregistered code defaults to `KindUnknown` (hidden) and HTTP 500, or you can skip registration and just override per error with `WithKind`/`WithExpose` instead.
 
 ---
 
@@ -631,17 +679,25 @@ Use these with `WithViolation(field, reason, params...)`. `params` in the table 
 | `Recover(v any, opts ...ErrorOption) *Error` | Converts a recovered panic value (from `recover()`) into an error with `CodePanic` and a captured stack. Returns `nil` if `v` is `nil`. |
 | `FromError(err error) (*Error, bool)` | Finds an `*Error` anywhere in `err`'s chain. Thin wrapper over `errors.As`. |
 
+### Registration
+
+| Function | What it does |
+|---|---|
+| `RegisterCode(code Code, kind Kind, httpStatus int)` | Registers a new `Code` with its `Kind` and HTTP status. Panics if `code` is already registered (built-in or previously registered), or if `code`/`kind`/`httpStatus` is malformed (empty code, unknown `Kind`, status outside 400-599). See [Step 2](#step-2-understand-code). |
+| `ExposedCodes() map[Code]Kind` | Every registered code whose default `Kind` is safe to expose (`Kind.Safe()`) — built-ins and anything from `RegisterCode`. Handy for a Swagger enum or a sync test. See [Step 16](#step-16-swagger--openapi-docs). |
+
 ### Options (pass any combination to `New`/`Wrap`/`Recover`)
 
 | Option | Effect |
 |---|---|
 | `WithMessage(string)` | Sets a ready-to-display message. Sent to client only if `Exposed()`. |
+| `WithParam(key string, value any)` | Sets one error-level param (e.g. `resource`, `max`). Sent to client only if `Exposed()`. Repeatable; a later call with the same key overwrites it. |
 | `WithViolation(field string, reason ErrorReason, params ...Param)` | Appends one field violation. Repeatable. |
 | `WithViolations(vs ...Violation)` | Appends a pre-built batch of violations. |
 | `WithErr(error)` | Attaches the wrapped cause. Log-only, never serialized. |
 | `WithDiagnostic(key DiagnosticKey, value string)` | Attaches an internal-only debug note. Log-only, never serialized. |
 | `WithKind(Kind)` | Overrides the code's default `Kind`. |
-| `WithExpose(bool)` | Overrides whether `Message`/`Violations` are sent to a client. |
+| `WithExpose(bool)` | Overrides whether `Message`/`Violations`/`Params` are sent to a client. |
 | `WithStack()` | Captures the current call stack for `.Stack()`. |
 
 ### Types
@@ -664,11 +720,12 @@ Use these with `WithViolation(field, reason, params...)`. `params` in the table 
 | `Code() Code` | The real code | Always safe to log; `MarshalJSON` substitutes `CodeInternalError` when not `Exposed()`. |
 | `Kind() Kind` | The classification | Log-only, never in JSON. |
 | `Message() string` | The explicit message, if set | Sent to client only if `Exposed()`. |
+| `Params() map[string]any` | A defensive copy of error-level params | Sent to client only if `Exposed()`. |
 | `Violations() []Violation` | A defensive copy | Sent to client only if `Exposed()`. |
 | `Diagnostics() map[DiagnosticKey]string` | A defensive copy | Log-only, never in JSON, even if `Exposed()`. |
 | `Err() error` | The wrapped cause, if any | Log-only, never in JSON. |
 | `Stack() string` | Formatted call stack, or `""` | Log-only, never in JSON. Only set if `WithStack()`/`Recover` was used. |
-| `Exposed() bool` | Whether `Message`/`Violations` reach the client | Defaults to `Kind().Safe()`; overridden by `WithExpose`. |
+| `Exposed() bool` | Whether `Message`/`Params`/`Violations` reach the client | Defaults to `Kind().Safe()`; overridden by `WithExpose`. |
 | `HTTPStatus() int` | HTTP status for `Code()` | |
 | `DefaultMessage() string` | Best-effort English fallback text | See [Step 13](#step-13-defaultmessage--a-plain-english-fallback). |
 | `Error() string` | One-line description for plain-text logs | Always full detail; excludes `Stack()`. |

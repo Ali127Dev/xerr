@@ -3,6 +3,52 @@
 All notable changes to this module are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-09-19
+
+A backward-compatible feature release: applications can now register
+their own domain-specific `Code`s instead of writing directly to the
+exported `CodesKind`/`CodesHttpStatus` maps, and errors can carry
+dynamic detail that isn't tied to one field.
+
+### Added
+
+- `RegisterCode(code Code, kind Kind, httpStatus int)` — registers a new
+  `Code` with its `Kind` and HTTP status, so `Code.Kind()` /
+  `Code.HTTPStatus()` (and everything built on them) recognize it
+  exactly like a built-in code. Panics on a duplicate registration —
+  whether the collision is with a built-in code or one your application
+  registered earlier — instead of silently overwriting it. Also panics
+  on malformed input: an empty `code`, a `kind` outside the four defined
+  `Kind` constants, or an `httpStatus` outside 400-599. Guards
+  `CodesKind`/`CodesHttpStatus` with a `sync.RWMutex`, also now used by
+  `Code.Kind()`/`Code.HTTPStatus()` for their reads, so registration is
+  safe under `-race` as long as it happens before those reads race with
+  it (typically: register from `init()`, before your server starts
+  accepting traffic).
+- `ExposedCodes() map[Code]Kind` — every registered code (built-in or
+  via `RegisterCode`) whose default `Kind` is safe to expose. Meant for
+  building a Swagger/OpenAPI enum for the `code` field, or a test that
+  keeps an application's public codes in sync with what's registered.
+- `WithParam(key string, value any) ErrorOption` and `Error.Params()` —
+  error-level dynamic detail (e.g. `{"resource": "product", "max": 5}`),
+  analogous to a `Violation`'s `Params` but scoped to the whole error.
+  Follows the exact same exposure rule as `Message` and `Violations`:
+  included in `MarshalJSON` only when `Exposed()`, always included in
+  `Error()` and `LogValue()`.
+- `SwaggerErrOutput.Params map[string]any` — brings the Swagger DTO back
+  in sync with the real `MarshalJSON` shape now that `Error` can carry
+  params. Its doc comment explains why `Code` still can't be a generated
+  enum (xerr doesn't know an application's domain codes) and how to
+  build one yourself from `ExposedCodes()`.
+
+### Notes
+
+- `CodesKind` and `CodesHttpStatus` remain exported for backward
+  compatibility — writing to them directly still works — but their doc
+  comments now point to `RegisterCode` as the safe, validated way to add
+  a code.
+- No existing exported identifier was renamed or removed.
+
 ## [2.0.0] - 2026-09-18
 
 This release reworks the public API around one idea: an error's `Kind`

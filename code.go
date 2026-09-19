@@ -8,6 +8,9 @@ type Code string
 func (c Code) String() string { return string(c) }
 
 func (c Code) HTTPStatus() int {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
 	if status, ok := CodesHttpStatus[c]; ok {
 		return status
 	}
@@ -18,6 +21,9 @@ func (c Code) HTTPStatus() int {
 // whether an error carrying it is exposed to clients by default. See
 // CodesKind.
 func (c Code) Kind() Kind {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
 	if kind, ok := CodesKind[c]; ok {
 		return kind
 	}

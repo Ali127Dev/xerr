@@ -2,7 +2,8 @@
 // for DDD / clean-architecture Go services.
 //
 // Key features:
-//   - Strongly typed, machine-readable error codes (Code)
+//   - Strongly typed, machine-readable error codes (Code), extensible
+//     with your own application-specific codes via RegisterCode
 //   - A Kind (domain / application / infrastructure / unknown) that
 //     decides, by default, whether an error is safe to expose to a
 //     client — so infrastructure failures can be logged in full while
@@ -35,6 +36,7 @@
 //	                                                          otherwise CodeInternalError)
 //	Kind         always                                      never
 //	Message      always                                      only if Exposed
+//	Params       always                                      only if Exposed
 //	Violations   always                                      only if Exposed
 //	Diagnostics  always                                      never, even if Exposed
 //	Err (cause)  always                                       never

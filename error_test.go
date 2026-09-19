@@ -14,6 +14,7 @@ import (
 const (
 	fieldEmail    = "email"
 	fieldPassword = "password"
+	mutatedValue  = "mutated"
 )
 
 func TestNew_DefaultKindFromCode(t *testing.T) {
@@ -108,6 +109,62 @@ func TestError_MarshalJSON_Exposed(t *testing.T) {
 	params, ok := second["params"].(map[string]any)
 	if !ok || params["min"] != float64(8) {
 		t.Fatalf("violations[1].params = %v", second["params"])
+	}
+}
+
+func TestError_WithParam_ExposedInJSON(t *testing.T) {
+	e := xerr.New(xerr.CodeInvalidParam,
+		xerr.WithMessage("usage limit exceeded"),
+		xerr.WithParam("resource", "seats"),
+		xerr.WithParam("max", 5),
+	)
+
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+
+	params, ok := got["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params = %v", got["params"])
+	}
+	if params["resource"] != "seats" || params["max"] != float64(5) {
+		t.Fatalf("params = %v", params)
+	}
+}
+
+func TestError_WithParam_HiddenWhenNotExposed(t *testing.T) {
+	e := xerr.New(xerr.CodeDatabaseError, xerr.WithParam("table", "users"))
+
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	want := `{"code":"INTERNAL_SERVER_ERROR"}`
+	if string(data) != want {
+		t.Fatalf("Marshal() = %s, want %s", data, want)
+	}
+
+	// Params stays available server-side regardless of Exposed.
+	if e.Params()["table"] != "users" {
+		t.Fatalf("Params() = %v", e.Params())
+	}
+}
+
+func TestParams_ReturnsCopy(t *testing.T) {
+	e := xerr.New(xerr.CodeInvalidParam, xerr.WithParam("resource", "seats"))
+
+	p := e.Params()
+	p["resource"] = mutatedValue
+
+	if e.Params()["resource"] != "seats" {
+		t.Fatal("Params() should return a defensive copy")
 	}
 }
 
@@ -281,7 +338,7 @@ func TestViolations_ReturnsCopy(t *testing.T) {
 	e := xerr.New(xerr.CodeValidationFailed, xerr.WithViolation(fieldEmail, xerr.ErrorReasonRequired))
 
 	v := e.Violations()
-	v[0].Field = "mutated"
+	v[0].Field = mutatedValue
 
 	if e.Violations()[0].Field != fieldEmail {
 		t.Fatal("Violations() should return a defensive copy")
@@ -292,7 +349,7 @@ func TestDiagnostics_ReturnsCopy(t *testing.T) {
 	e := xerr.New(xerr.CodeInternalError, xerr.WithDiagnostic(xerr.DiagnosticOperation, "op"))
 
 	d := e.Diagnostics()
-	d[xerr.DiagnosticOperation] = "mutated"
+	d[xerr.DiagnosticOperation] = mutatedValue
 
 	if e.Diagnostics()[xerr.DiagnosticOperation] != "op" {
 		t.Fatal("Diagnostics() should return a defensive copy")

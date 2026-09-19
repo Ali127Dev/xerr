@@ -68,6 +68,23 @@ func WithViolations(vs ...Violation) ErrorOption {
 	}
 }
 
+// WithParam attaches error-level dynamic detail a client-facing message
+// template needs — analogous to a Violation's Params, but scoped to the
+// whole error rather than one field. Use it for things like which
+// resource was involved or a numeric limit that was exceeded (e.g.
+// WithParam("resource", "product"), WithParam("max", 5)). Sent to the
+// client only when Exposed — exactly like WithMessage and WithViolation.
+// Can be called multiple times; a later call with the same key
+// overwrites the earlier value.
+func WithParam(key string, value any) ErrorOption {
+	return func(e *Error) {
+		if e.params == nil {
+			e.params = make(map[string]any)
+		}
+		e.params[key] = value
+	}
+}
+
 // WithDiagnostic attaches internal-only debug context (e.g. the
 // operation being performed, or a resource identifier). Diagnostics
 // appear in Error()'s log output but are never exposed via MarshalJSON.
