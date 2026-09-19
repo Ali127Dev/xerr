@@ -11,7 +11,7 @@ func (c Code) HTTPStatus() int {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 
-	if status, ok := CodesHttpStatus[c]; ok {
+	if status, ok := codeStatuses[c]; ok {
 		return status
 	}
 	return http.StatusInternalServerError
@@ -19,12 +19,12 @@ func (c Code) HTTPStatus() int {
 
 // Kind reports the default Kind for this code, which in turn decides
 // whether an error carrying it is exposed to clients by default. See
-// CodesKind.
+// RegisterCode.
 func (c Code) Kind() Kind {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 
-	if kind, ok := CodesKind[c]; ok {
+	if kind, ok := codeKinds[c]; ok {
 		return kind
 	}
 	return KindUnknown

@@ -25,6 +25,7 @@ This guide walks through every feature, step by step, with runnable code. No pri
 - [Reference: built-in codes](#reference-built-in-codes)
 - [Reference: built-in violation reasons](#reference-built-in-violation-reasons)
 - [Reference: full API](#reference-full-api)
+- [Migrating from v2 to v3](#migrating-from-v2-to-v3)
 - [Gotcha: typed nil](#gotcha-typed-nil)
 - [License](#license)
 
@@ -47,16 +48,18 @@ Without a library, you end up hand-writing an `if` somewhere in every handler to
 ## Install
 
 ```sh
-go get github.com/Ali127Dev/xerr/v2
+go get github.com/Ali127Dev/xerr/v3
 ```
 
 Import it like this:
 
 ```go
-import "github.com/Ali127Dev/xerr/v2"
+import "github.com/Ali127Dev/xerr/v3"
 ```
 
-The Go package name is still `xerr` (the `/v2` is just part of the module path, required by Go once a library makes a breaking change — see [CHANGELOG.md](CHANGELOG.md)). So in code you still write `xerr.New(...)`, `xerr.Code`, etc., exactly as shown below.
+The Go package name is still `xerr` (the `/v3` is just part of the module path, required by Go once a library makes a breaking change — see [CHANGELOG.md](CHANGELOG.md)). So in code you still write `xerr.New(...)`, `xerr.Code`, etc., exactly as shown below.
+
+Coming from `v2`? See [Migrating from v2 to v3](#migrating-from-v2-to-v3).
 
 ---
 
@@ -683,7 +686,8 @@ Use these with `WithViolation(field, reason, params...)`. `params` in the table 
 
 | Function | What it does |
 |---|---|
-| `RegisterCode(code Code, kind Kind, httpStatus int)` | Registers a new `Code` with its `Kind` and HTTP status. Panics if `code` is already registered (built-in or previously registered), or if `code`/`kind`/`httpStatus` is malformed (empty code, unknown `Kind`, status outside 400-599). See [Step 2](#step-2-understand-code). |
+| `RegisterCode(code Code, kind Kind, httpStatus int)` | Registers a new `Code` with its `Kind` and HTTP status. Panics if `code` is already registered (built-in or previously registered), or if `code`/`kind`/`httpStatus` is malformed (empty or lower-case code, unknown `Kind`, status outside 400-599). See [Step 2](#step-2-understand-code). |
+| `RegisteredCodes() map[Code]Kind` | Every registered code (built-ins and anything from `RegisterCode`), regardless of whether it's safe to expose. |
 | `ExposedCodes() map[Code]Kind` | Every registered code whose default `Kind` is safe to expose (`Kind.Safe()`) — built-ins and anything from `RegisterCode`. Handy for a Swagger enum or a sync test. See [Step 16](#step-16-swagger--openapi-docs). |
 
 ### Options (pass any combination to `New`/`Wrap`/`Recover`)
@@ -733,6 +737,54 @@ Use these with `WithViolation(field, reason, params...)`. `params` in the table 
 | `Is(target error) bool` | Whether `target` has the same `Code()` | For `errors.Is`. |
 | `MarshalJSON() ([]byte, error)` | Client-safe JSON | See [Step 3](#step-3-understand-kind-and-who-gets-to-see-what). |
 | `LogValue() slog.Value` | Structured log view | See [Step 10](#step-10-logging-with-logslog). Unfiltered — includes everything, unlike `MarshalJSON`. |
+
+---
+
+## Migrating from v2 to v3
+
+v3 closes a backdoor v2 left open: `CodesKind` and `CodesHttpStatus` used to be exported `map[Code]Kind` / `map[Code]int` variables, which meant any caller could write straight into the registry (`xerr.CodesKind[x] = y`) — no validation, no locking, no duplicate check. `RegisterCode` (added in v2.1.0) was always the *recommended* way in; v3 makes it the *only* way in by unexporting both maps. Everything else about the public API is unchanged.
+
+**1. Bump the import path.**
+
+```diff
+-go get github.com/Ali127Dev/xerr/v2
++go get github.com/Ali127Dev/xerr/v3
+```
+
+```diff
+-import "github.com/Ali127Dev/xerr/v2"
++import "github.com/Ali127Dev/xerr/v3"
+```
+
+Nothing else changes at the call site — `xerr.New(...)`, `xerr.Wrap(...)`, every option and accessor keep their exact signatures.
+
+**2. Replace any direct write to `CodesKind` / `CodesHttpStatus` with `RegisterCode`.**
+
+If you had application code doing this (undocumented, but technically possible in v2):
+
+```diff
+-xerr.CodesKind[CodePlanNotIncluded] = xerr.KindDomain
+-xerr.CodesHttpStatus[CodePlanNotIncluded] = http.StatusForbidden
++xerr.RegisterCode(CodePlanNotIncluded, xerr.KindDomain, http.StatusForbidden)
+```
+
+If you were already using `RegisterCode` (the documented v2.1.0 path), nothing changes — just the import path from step 1.
+
+**3. If you were reading `CodesKind` / `CodesHttpStatus` directly** (e.g. to enumerate codes for a test or an OpenAPI enum), switch to the public functions that return the same information as a defensive copy:
+
+```diff
+-for code := range xerr.CodesKind { ... }
++for code := range xerr.RegisteredCodes() { ... } // every registered code
+```
+
+```diff
+-for code := range xerr.CodesKind {
+-    if xerr.CodesKind[code].Safe() { ... }
+-}
++for code := range xerr.ExposedCodes() { ... } // only the safe-to-expose subset
+```
+
+**4. `RegisterCode` got stricter.** It was already documented to panic on a duplicate/collision (v2.1.0). v3 additionally panics on malformed input: an empty or lower-case code (codes must match `^[A-Z][A-Z0-9_]*$`, the same shape as every built-in), a `Kind` outside the four defined constants, or an `httpStatus` outside 400-599. If your registered codes already followed the built-in naming convention (as the examples throughout this README do), nothing changes for you.
 
 ---
 

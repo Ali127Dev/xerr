@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Ali127Dev/xerr/v2"
+	"github.com/Ali127Dev/xerr/v3"
 )
 
 // Shared field names reused across this package's test tables.

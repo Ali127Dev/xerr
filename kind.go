@@ -54,15 +54,15 @@ func (k Kind) Safe() bool {
 	}
 }
 
-// CodesKind maps an error Code to its default Kind. Codes not present
+// codeKinds maps an error Code to its default Kind. Codes not present
 // default to KindUnknown (unsafe to expose).
 //
-// Prefer RegisterCode to add a new code: it takes the same lock
-// Code.Kind() / Code.HTTPStatus() use for reads, and it panics on a
-// collision instead of silently overwriting an existing entry. Writing
-// to this map directly still works, for backward compatibility, but
-// bypasses both of those protections.
-var CodesKind = map[Code]Kind{
+// Unexported since v3: the only way to add a code is RegisterCode,
+// which takes the lock Code.Kind()/Code.HTTPStatus() use for reads and
+// validates its input, instead of letting a caller write an
+// unvalidated, unlocked entry straight into this map (as was possible
+// through the exported CodesKind var in v2).
+var codeKinds = map[Code]Kind{
 	// System / Internal
 	CodeInternalError:      KindUnknown,
 	CodeUnknownError:       KindUnknown,

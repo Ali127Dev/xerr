@@ -3,6 +3,54 @@
 All notable changes to this module are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.0] - 2026-09-19
+
+A deliberate breaking release with one purpose: close the direct-registry-mutation
+backdoor v2.1.0 left open. `RegisterCode` was already the documented way to add a
+code; this release makes it the *only* way, by unexporting the maps it wrote into.
+
+### ⚠️ Breaking changes
+
+- **Module path is now `github.com/Ali127Dev/xerr/v3`.** Required by Go's module
+  versioning rules for a breaking v3+ API. Import as
+  `github.com/Ali127Dev/xerr/v3` — the package name is still `xerr`, so call
+  sites don't otherwise change. See [README.md](README.md#migrating-from-v2-to-v3)
+  for the full migration guide.
+- **`CodesKind` and `CodesHttpStatus` are no longer exported.** They were
+  `map[Code]Kind` / `map[Code]int` package vars that any caller could write into
+  directly — no validation, no locking, no duplicate check — bypassing
+  `RegisterCode` entirely. They're now unexported (`codeKinds`, `codeStatuses`);
+  `RegisterCode` is the only way to add a code. If you read these maps to
+  enumerate codes, use the new `RegisteredCodes()` (all codes) or the existing
+  `ExposedCodes()` (safe-to-expose codes only) instead — both return a
+  defensive copy.
+- **`RegisterCode` validates the code's format.** It already panicked (since
+  v2.1.0) on a duplicate/collision, an empty code, an unknown `Kind`, or an
+  `httpStatus` outside 400-599. It now also panics if `code` doesn't match
+  `^[A-Z][A-Z0-9_]*$` — the same upper-case-with-underscores shape every
+  built-in code already follows. A code registered under the old, looser rules
+  that happened to already match this shape is unaffected.
+
+### Added
+
+- `RegisteredCodes() map[Code]Kind` — every registered code (built-in and
+  anything from `RegisterCode`), regardless of whether it's safe to expose.
+  The replacement for iterating the old exported `CodesKind` directly.
+- A structural test (`TestNoExportedMutableGlobals`, parses the package's own
+  source with `go/parser`) that fails the build if the package ever gains
+  another exported package-level `var` of map or slice type — the guardrail
+  that keeps this release's backdoor closed for good.
+
+### Notes
+
+- Deliberately unchanged: registering a code concurrently with traffic that's
+  already reading the registry is still not recommended. The `sync.RWMutex`
+  added in v2.1.0 makes concurrent registration data-race-free, but a code
+  registered mid-traffic can still be seen as unregistered by requests that
+  raced ahead of the write. The documented pattern remains: register from
+  `init()`, before your server starts accepting traffic.
+- No other exported identifier was renamed or removed.
+
 ## [2.1.0] - 2026-09-19
 
 A backward-compatible feature release: applications can now register

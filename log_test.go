@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/Ali127Dev/xerr/v2"
+	"github.com/Ali127Dev/xerr/v3"
 )
 
 func TestError_LogValue_IncludesUnexposedFields(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Ali127Dev/xerr/v2"
+	"github.com/Ali127Dev/xerr/v3"
 )
 
 func TestRegisterCode_RegistersKindAndHTTPStatus(t *testing.T) {
@@ -47,6 +47,15 @@ func TestRegisterCode_EmptyCodePanics(t *testing.T) {
 	xerr.RegisterCode(xerr.Code(""), xerr.KindDomain, http.StatusForbidden)
 }
 
+func TestRegisterCode_LowercaseCodePanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RegisterCode should panic on a lower-case code")
+		}
+	}()
+	xerr.RegisterCode(xerr.Code("plan_not_included"), xerr.KindDomain, http.StatusForbidden)
+}
+
 func TestRegisterCode_InvalidKindPanics(t *testing.T) {
 	defer func() {
 		if recover() == nil {
@@ -58,11 +67,12 @@ func TestRegisterCode_InvalidKindPanics(t *testing.T) {
 
 func TestRegisterCode_HTTPStatusOutOfRangePanics(t *testing.T) {
 	tests := []struct {
-		name   string
-		status int
+		name       string
+		codeSuffix string
+		status     int
 	}{
-		{"below 400", http.StatusOK},
-		{"above 599", 600},
+		{"below 400", "BELOW_400", http.StatusOK},
+		{"above 599", "ABOVE_599", 600},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -71,7 +81,7 @@ func TestRegisterCode_HTTPStatusOutOfRangePanics(t *testing.T) {
 					t.Fatalf("RegisterCode should panic on httpStatus=%d", tt.status)
 				}
 			}()
-			xerr.RegisterCode(xerr.Code("TEST_REGISTER_CODE_STATUS_"+tt.name), xerr.KindDomain, tt.status)
+			xerr.RegisterCode(xerr.Code("TEST_REGISTER_CODE_STATUS_"+tt.codeSuffix), xerr.KindDomain, tt.status)
 		})
 	}
 }
@@ -121,9 +131,31 @@ func TestExposedCodes_OnlyContainsCodesSafeByDefault(t *testing.T) {
 }
 
 func TestAllCodesHaveNonZeroHTTPStatus(t *testing.T) {
-	for code := range xerr.CodesKind {
+	for code := range xerr.RegisteredCodes() {
 		if status := code.HTTPStatus(); status == 0 {
 			t.Errorf("code %q has HTTPStatus() == 0", code)
 		}
+	}
+}
+
+func TestRegisteredCodes_ReturnsCopy(t *testing.T) {
+	codes := xerr.RegisteredCodes()
+
+	before := len(codes)
+	codes[xerr.Code("TEST_REGISTERED_CODES_MUTATION")] = xerr.KindDomain
+
+	if got := len(xerr.RegisteredCodes()); got != before {
+		t.Fatalf("RegisteredCodes() = %d entries after mutating a prior result, want %d (should be a defensive copy)", got, before)
+	}
+}
+
+func TestExposedCodes_ReturnsCopy(t *testing.T) {
+	codes := xerr.ExposedCodes()
+
+	before := len(codes)
+	codes[xerr.Code("TEST_EXPOSED_CODES_MUTATION")] = xerr.KindDomain
+
+	if got := len(xerr.ExposedCodes()); got != before {
+		t.Fatalf("ExposedCodes() = %d entries after mutating a prior result, want %d (should be a defensive copy)", got, before)
 	}
 }

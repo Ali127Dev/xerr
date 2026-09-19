@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Ali127Dev/xerr/v2"
+	"github.com/Ali127Dev/xerr/v3"
 )
 
 func TestError_Stack_EmptyByDefault(t *testing.T) {

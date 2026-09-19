@@ -3,7 +3,7 @@ package xerr
 import "errors"
 
 // New creates a new structured xerr.Error. Its Kind defaults to the
-// Code's registered Kind (see CodesKind) and can be overridden with
+// Code's registered Kind (see RegisterCode) and can be overridden with
 // WithKind.
 func New(code Code, opts ...ErrorOption) *Error {
 	e := &Error{
@@ -18,7 +18,7 @@ func New(code Code, opts ...ErrorOption) *Error {
 
 // Wrap converts a raw error into an xerr.Error with a given code,
 // preserving err for Unwrap/errors.Is/errors.As and log output. Its Kind
-// defaults to the Code's registered Kind (see CodesKind) and can be
+// defaults to the Code's registered Kind (see RegisterCode) and can be
 // overridden with WithKind. Returns nil if err is nil.
 func Wrap(err error, code Code, opts ...ErrorOption) *Error {
 	if err == nil {

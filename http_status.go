@@ -2,14 +2,14 @@ package xerr
 
 import "net/http"
 
-// CodesHttpStatus maps an error Code to default HTTP status.
+// codeStatuses maps an error Code to its default HTTP status.
 //
-// Prefer RegisterCode to add a new code: it takes the same lock
-// Code.Kind() / Code.HTTPStatus() use for reads, and it panics on a
-// collision instead of silently overwriting an existing entry. Writing
-// to this map directly still works, for backward compatibility, but
-// bypasses both of those protections.
-var CodesHttpStatus = map[Code]int{
+// Unexported since v3: the only way to add a code is RegisterCode,
+// which takes the lock Code.Kind()/Code.HTTPStatus() use for reads and
+// validates its input, instead of letting a caller write an
+// unvalidated, unlocked entry straight into this map (as was possible
+// through the exported CodesHttpStatus var in v2).
+var codeStatuses = map[Code]int{
 	// ========================
 	// System / Internal Errors
 	// ========================

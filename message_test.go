@@ -3,7 +3,7 @@ package xerr_test
 import (
 	"testing"
 
-	"github.com/Ali127Dev/xerr/v2"
+	"github.com/Ali127Dev/xerr/v3"
 )
 
 func TestViolation_DefaultMessage(t *testing.T) {

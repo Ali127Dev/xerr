@@ -22,7 +22,8 @@ func WithErr(err error) ErrorOption {
 }
 
 // WithKind overrides the Kind the error would otherwise inherit from its
-// Code (see CodesKind), and with it, the default answer to Exposed.
+// Code (see Code.Kind and RegisterCode), and with it, the default
+// answer to Exposed.
 func WithKind(k Kind) ErrorOption {
 	return func(e *Error) {
 		e.kind = k

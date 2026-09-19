@@ -2,17 +2,23 @@ package xerr
 
 import (
 	"fmt"
+	"maps"
+	"regexp"
 	"sync"
 )
 
-// registryMu guards concurrent access to CodesKind and CodesHttpStatus.
+// registryMu guards concurrent access to codeKinds and codeStatuses.
 // Code.Kind() and Code.HTTPStatus() take a read lock; RegisterCode takes
-// a write lock. The two maps stay exported for backward compatibility
-// (see their own doc comments), but RegisterCode is the safe, documented
-// way to add a code: unlike writing to the maps directly, it takes the
-// same lock those reads use, and it panics on a collision instead of
-// silently overwriting a code you didn't mean to touch.
+// a write lock. Both maps are unexported (since v3): RegisterCode is the
+// only way to add a code, so every entry is guaranteed to have gone
+// through its validation and through this same lock — there is no
+// longer a way to write an unvalidated, unlocked entry directly.
 var registryMu sync.RWMutex
+
+// codeFormat is the shape RegisterCode requires of a new Code: an
+// upper-case identifier starting with a letter, matching the style of
+// every built-in code (e.g. "RESOURCE_NOT_FOUND", "PLAN_NOT_INCLUDED").
+var codeFormat = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 // RegisterCode registers a new application Code with its Kind and HTTP
 // status, so Code.Kind() / Code.HTTPStatus() — and everything built on
@@ -40,13 +46,20 @@ var registryMu sync.RWMutex
 //
 // It also panics on malformed input, so a mistake fails loudly at
 // startup instead of quietly registering a code no error will ever
-// match correctly: code must not be empty, kind must be one of the
-// defined Kind constants, and httpStatus must fall in the 400-599
-// range (a registered code always represents a client- or server-side
-// failure — there is no legitimate 2xx/3xx error code).
+// match correctly:
+//   - code must be non-empty and match ^[A-Z][A-Z0-9_]*$ (upper-case
+//     letters, digits, and underscores, starting with a letter) — the
+//     same shape as every built-in code;
+//   - kind must be one of the four defined Kind constants;
+//   - httpStatus must fall in the 400-599 range (a registered code
+//     always represents a client- or server-side failure — there is no
+//     legitimate 2xx/3xx error code).
 func RegisterCode(code Code, kind Kind, httpStatus int) {
 	if code == "" {
 		panic("xerr: RegisterCode: code must not be empty")
+	}
+	if !codeFormat.MatchString(string(code)) {
+		panic(fmt.Sprintf("xerr: RegisterCode: code %q must match %s (upper-case letters, digits, and underscores, starting with a letter)", code, codeFormat.String()))
 	}
 	if !kind.known() {
 		panic(fmt.Sprintf("xerr: RegisterCode: %q is not a valid Kind", kind))
@@ -58,15 +71,28 @@ func RegisterCode(code Code, kind Kind, httpStatus int) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 
-	if _, exists := CodesKind[code]; exists {
+	if _, exists := codeKinds[code]; exists {
 		panic(fmt.Sprintf("xerr: RegisterCode: code %q is already registered", code))
 	}
-	if _, exists := CodesHttpStatus[code]; exists {
+	if _, exists := codeStatuses[code]; exists {
 		panic(fmt.Sprintf("xerr: RegisterCode: code %q is already registered", code))
 	}
 
-	CodesKind[code] = kind
-	CodesHttpStatus[code] = httpStatus
+	codeKinds[code] = kind
+	codeStatuses[code] = httpStatus
+}
+
+// RegisteredCodes returns every registered Code (built-in and anything
+// added via RegisterCode) together with its default Kind — regardless
+// of whether that Kind is safe to expose. Use ExposedCodes instead if
+// you only want the subset that's safe to expose by default.
+func RegisteredCodes() map[Code]Kind {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
+	out := make(map[Code]Kind, len(codeKinds))
+	maps.Copy(out, codeKinds)
+	return out
 }
 
 // ExposedCodes returns every registered Code whose default Kind is safe
@@ -84,8 +110,8 @@ func ExposedCodes() map[Code]Kind {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 
-	out := make(map[Code]Kind, len(CodesKind))
-	for code, kind := range CodesKind {
+	out := make(map[Code]Kind, len(codeKinds))
+	for code, kind := range codeKinds {
 		if kind.Safe() {
 			out[code] = kind
 		}
